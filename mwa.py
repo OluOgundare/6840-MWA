@@ -113,7 +113,7 @@ if __name__ == "__main__":
     epsilon = 0.1 # Altruism Factor: [0,1)
     friends = make_friends(n, setup = 1)
 
-    # Interesting Aside: Larger values of epsilon leads to faster convergence of strategy to pure strategy
+    # Interesting Aside: Larger values of epsilon leads to faster convergence to pure strategy
     final_dist, strategy_over_time = run_multiplicative_weights(n, m, w, q, friends, epsilon, eta=0.01, iterations=100)
     plot_final_distribution(final_dist, m)
     plot_strategy_convergence(strategy_over_time, n, m)
