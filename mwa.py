@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.family': 'Monospace'})
+plt.rcParams.update({"font.family": "Monospace"})
 
 def run_multiplicative_weights(n, m, w, q, friends, epsilon = 0.1, eta = 0.01, iterations = 10_000):
     log_weights = np.zeros((n, m)) 
@@ -16,7 +16,7 @@ def run_multiplicative_weights(n, m, w, q, friends, epsilon = 0.1, eta = 0.01, i
 
         # Sample actions
         choices = np.array([np.random.choice(m, p = dist[i]) for i in range(n)])
-        counts = np.zeros(m, dtype=int)
+        counts = np.zeros(m, dtype = int)
         for c in choices:
             counts[c] += 1
 
@@ -29,13 +29,17 @@ def run_multiplicative_weights(n, m, w, q, friends, epsilon = 0.1, eta = 0.01, i
                 success_probs[j] = 0
 
         individual_payoffs = np.zeros(n)
+        sucesssful_projects = np.zeros(m)
+
+        # Calculate which projects were successful
+        for i in range(n):
+            if np.random.rand() < success_probs[i]:
+                sucesssful_projects[i] = 1
+                
         for i in range(n):
             chosen_project = choices[i]
-            if success_probs[chosen_project] > 1e-12:
-                  if np.random.rand() < success_probs[chosen_project]:
-                        individual_payoffs[i] = w[chosen_project] / counts[chosen_project]
-                  else:
-                        individual_payoffs[i] = 0.0
+            # Divide successful projects even amongst all players who chose it
+            individual_payoffs[i] = w[chosen_project] * sucesssful_projects[chosen_project] / (counts[chosen_project])
 
         # Adding friends utility
         utilities = np.zeros(n)
@@ -48,14 +52,16 @@ def run_multiplicative_weights(n, m, w, q, friends, epsilon = 0.1, eta = 0.01, i
             total_payoff = total_payoff + epsilon * friend_payoff 
             utilities[i] = total_payoff
 
-        utilities = np.clip(utilities, -10, 10)
-
         for i in range(n):
             chosen_j = choices[i]
             log_weights[i, chosen_j] += eta * utilities[i]
 
         weights_over_time[:, it, :] = dist
+
+        # plot_final_distribution(dist, m)
     
+    utilities = np.clip(utilities, -10, 10)
+
     # Return final distribution
     dist = np.zeros((n, m))
     for i in range(n):
@@ -65,13 +71,19 @@ def run_multiplicative_weights(n, m, w, q, friends, epsilon = 0.1, eta = 0.01, i
     return dist, weights_over_time
 
 def plot_final_distribution(dist, m):
-    """Assumes strategy convered to pure strategy and chooses the project with highest probability"""
-    plt.figure(figsize = (12, 8))
-    plt.hist(np.argmax(dist, axis = 1), bins = np.arange(0, m + 0.5, 1))
+    """Assumes strategy converged to pure strategy and chooses the project with highest probability"""
+    plt.figure(figsize=(12, 8))
+    counts, bins, patches = plt.hist(np.argmax(dist, axis=1), bins=np.arange(0, m + 0.5, 1))
 
     plt.xlabel("Project Number")
     plt.ylabel("Number of Researchers on Project")
     plt.title("MW Algorithm: Final Distribution of Researchers on Projects")
+
+    # Add numbers on top of the bars
+    for count, patch in zip(counts, patches):
+        height = patch.get_height()
+        plt.text(patch.get_x() + patch.get_width() / 2, height, int(count), ha = "center", va = "bottom")
+
     plt.show()
 
 def plot_strategy_convergence(weights_over_time, n, m):
@@ -81,7 +93,7 @@ def plot_strategy_convergence(weights_over_time, n, m):
 
       for i in range(n):
           for j in range(m):
-            axes[i].plot(weights_over_time[i, :, j], label=f"Project {j}")
+            axes[i].plot(weights_over_time[i, :, j], label=f"Project {j + 1}")
             axes[i].set_title(f"Player {i + 1} Strategy Convergence")
             axes[i].set_ylabel("Probability")
             axes[i].legend()
@@ -106,18 +118,19 @@ def make_friends(n, setup, num_friends = 3):
       return friends
     
 if __name__ == "__main__":
-    n = 6
-    m = 5
-    w = np.array([10, 20, 5, 15, 25])
-    q = np.array([0.9, 0.2, 0.05, 0.15, 0.3])
-    epsilon = 0.0 # Altruism Factor: [0,1)
-    friends = make_friends(n, setup = 1)
+    # Contrived Example adapted from paper
+    N = 50
+    n = N
+    m = N
+    w = np.array([1.0] + [1/N] * (N - 1))
+    q = np.array([1.0] * N)
+    epsilon = 1 # Altruism Factor: [0,1)
+    friends = make_friends(n, setup = 2, num_friends = N - 1)
 
-    # Interesting Aside: Larger values of epsilon leads to faster convergence to pure strategy
-        # When n >> m, strategies appear to converge towards uniform random
-    final_dist, strategy_over_time = run_multiplicative_weights(n, m, w, q, friends, epsilon, eta=0.01, iterations=100)
+    # Interesting Aside: Larger values of epsilon leads to faster convergence of strategy to pure strategy
+    final_dist, strategy_over_time = run_multiplicative_weights(n, m, w, q, friends, epsilon, eta = 0.01, iterations = 1_000)
     plot_final_distribution(final_dist, m)
-    plot_strategy_convergence(strategy_over_time, n, m)
+    # plot_strategy_convergence(strategy_over_time, n, m)
     print("Final approximate distribution:")
     df = pd.DataFrame(np.round(final_dist, 6), columns = [f"Project {i+1}" for i in range(m)], index = [f"Researcher {i+1}" for i in range(n)])
     print(df)
