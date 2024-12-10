@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 plt.rcParams.update({"font.family": "Monospace"})
+EXPL = -1
 
 def run_multiplicative_weights(n, m, w, q, friends, epsilon = 0.1, eta = 0.01, iterations = 10_000):
     log_weights = np.zeros((n, m)) 
@@ -9,59 +10,73 @@ def run_multiplicative_weights(n, m, w, q, friends, epsilon = 0.1, eta = 0.01, i
     
     for it in range(iterations):
         dist = np.zeros((n, m))
-        for i in range(n):
-            max_log = np.max(log_weights[i])
-            stable_exp = np.exp(log_weights[i] - max_log)
-            dist[i] = stable_exp / np.sum(stable_exp)
+        if not (it < EXPL):
+            for i in range(n):
+                max_log = np.max(log_weights[i])
+                stable_exp = np.exp(log_weights[i] - max_log)
+                dist[i] = stable_exp / np.sum(stable_exp)
+        else:
+            dist = np.ones((n, m)) / m
 
         # Sample actions
-        choices = np.array([np.random.choice(m, p = dist[i]) for i in range(n)])
-        counts = np.zeros(m, dtype = int)
-        for c in choices:
-            counts[c] += 1
+        def get_actions(choices):
+            if choices is None:
+                choices = np.array([np.random.choice(m, p = dist[i]) for i in range(n)])
+            counts = np.zeros(m, dtype = int)
+            for c in choices:
+                counts[c] += 1
 
-        success_probs = np.zeros(m)
-        for j in range(m):
-            if counts[j] > 0:
-                f_j = 1 - q[j]
-                success_probs[j] = 1 - (f_j ** counts[j])
-            else:
-                success_probs[j] = 0
+            success_probs = np.zeros(m)
+            for j in range(m):
+                if counts[j] > 0:
+                    f_j = 1 - q[j]
+                    success_probs[j] = 1 - (f_j ** counts[j])
+                else:
+                    success_probs[j] = 0
 
-        individual_payoffs = np.zeros(n)
-        sucesssful_projects = np.zeros(m)
+            individual_payoffs = np.zeros(n)
+            sucesssful_projects = np.zeros(m)
 
-        # Calculate which projects were successful
+            # Calculate which projects were successful
+            for i in range(n):
+                if np.random.rand() < success_probs[i]:
+                    sucesssful_projects[i] = 1
+                    
+            for i in range(n):
+                chosen_project = choices[i]
+                # Divide successful projects even amongst all players who chose it
+                individual_payoffs[i] = w[chosen_project] * sucesssful_projects[chosen_project] / (counts[chosen_project])
+
+            # Adding friends utility
+            utilities = np.zeros(n)
+            for i in range(n):
+                total_payoff = individual_payoffs[i]
+                friend_payoff = 0
+                for f_i in friends[i]:
+                    friend_payoff += individual_payoffs[f_i]
+
+                total_payoff = total_payoff + epsilon * friend_payoff 
+                utilities[i] = total_payoff   
+            return choices, utilities
+        
+        choices, utilities = get_actions(None)
         for i in range(n):
-            if np.random.rand() < success_probs[i]:
-                sucesssful_projects[i] = 1
-                
-        for i in range(n):
-            chosen_project = choices[i]
-            # Divide successful projects even amongst all players who chose it
-            individual_payoffs[i] = w[chosen_project] * sucesssful_projects[chosen_project] / (counts[chosen_project])
+            for j in range(m):
+                if j == choices[i]:
+                    log_weights[i, j] += eta * utilities[i]
+                else:
+                    new_choice = choices.copy()
+                    new_choice[i] = j
+                    _, new_utilities = get_actions(new_choice)
+                    log_weights[i, j] += eta * (new_utilities[i])
 
-        # Adding friends utility
-        utilities = np.zeros(n)
-        for i in range(n):
-            total_payoff = individual_payoffs[i]
-            friend_payoff = 0
-            for f_i in friends[i]:
-                friend_payoff += individual_payoffs[f_i]
-
-            total_payoff = total_payoff + epsilon * friend_payoff 
-            utilities[i] = total_payoff
-
-        for i in range(n):
-            chosen_j = choices[i]
-            log_weights[i, chosen_j] += eta * utilities[i]
+        # for i in range(n):
+        #     chosen_j = choices[i]
+        #     log_weights[i, chosen_j] += eta * utilities[i]
 
         weights_over_time[:, it, :] = dist
-
         # plot_final_distribution(dist, m)
     
-    utilities = np.clip(utilities, -10, 10)
-
     # Return final distribution
     dist = np.zeros((n, m))
     for i in range(n):
@@ -119,18 +134,22 @@ def make_friends(n, setup, num_friends = 3):
     
 if __name__ == "__main__":
     # Contrived Example adapted from paper
-    N = 50
+    # np.random.seed(56)
+    N = 30
     n = N
     m = N
-    w = np.array([1.0] + [1/N] * (N - 1))
+    w = np.array([1.0]  + [1/N] * (N - 1))
     q = np.array([1.0] * N)
     epsilon = 1 # Altruism Factor: [0,1)
     friends = make_friends(n, setup = 2, num_friends = N - 1)
 
     # Interesting Aside: Larger values of epsilon leads to faster convergence of strategy to pure strategy
-    final_dist, strategy_over_time = run_multiplicative_weights(n, m, w, q, friends, epsilon, eta = 0.01, iterations = 1_000)
+    final_dist, strategy_over_time = run_multiplicative_weights(n, m, w, q, friends, epsilon, eta = 1, iterations = 2_000)
     plot_final_distribution(final_dist, m)
     # plot_strategy_convergence(strategy_over_time, n, m)
     print("Final approximate distribution:")
     df = pd.DataFrame(np.round(final_dist, 6), columns = [f"Project {i+1}" for i in range(m)], index = [f"Researcher {i+1}" for i in range(n)])
     print(df)
+
+    # Maybe we can just show the average amount of unique projects that are worked on
+    # given an epsilon between 0 and 1
