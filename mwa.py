@@ -70,7 +70,7 @@ def plot_final_distribution(dist, m):
     plt.hist(np.argmax(dist, axis = 1), bins = np.arange(0, m + 0.5, 1))
 
     plt.xlabel("Project Number")
-    plt.ylabel("Number of Researchers on Prokect")
+    plt.ylabel("Number of Researchers on Project")
     plt.title("MW Algorithm: Final Distribution of Researchers on Projects")
     plt.show()
 
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     m = 5
     w = np.array([10, 20, 5, 15, 25])
     q = np.array([0.9, 0.2, 0.05, 0.15, 0.3])
-    epsilon = 0.1 # Altruism Factor: [0,1)
+    epsilon = 0.0 # Altruism Factor: [0,1)
     friends = make_friends(n, setup = 1)
 
     # Interesting Aside: Larger values of epsilon leads to faster convergence to pure strategy
