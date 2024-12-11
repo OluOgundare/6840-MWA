@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from collections import Counter
 plt.rcParams.update({"font.family": "Monospace"})
 EXPL = -1
 
@@ -130,26 +131,51 @@ def make_friends(n, setup, num_friends = 3):
       friends = []
       for i in range(n):
           friends.append([(i + j) % n for j in range(1, num_friends + 1)])
-      return friends
+    elif setup == 3:
+        friend_mat = np.random.randint(0, 2, size=(N, N))
+        np.fill_diagonal(friend_mat, 0)
+        friend_mat = np.triu(friend_mat) + np.triu(friend_mat, 1).T
+        friends = [list(np.where(friend_mat[i] == 1)[0]) for i in range(N)]
+    return friends
+
+def calculate_welfare(dist, w, q):
+    ct = Counter(int(x) for x in np.argmax(dist, axis=1))
+    welfare = 0
+    for k, v in ct.items():
+        welfare += (1 - (1 - q[k]) ** v) * w[k]
+    return welfare
     
 if __name__ == "__main__":
     # Contrived Example adapted from paper
     # np.random.seed(56)
-    N = 30
+    N = 16
     n = N
     m = N
-    w = np.array([1.0]  + [1/N] * (N - 1))
-    q = np.array([1.0] * N)
-    epsilon = 1 # Altruism Factor: [0,1)
-    friends = make_friends(n, setup = 2, num_friends = N - 1)
+    # w = np.array([1.0]  + [1/N] * (N - 1))
+    # q = np.array([1.0] * N)
+    
+    # epsilon = [0, .25]
+    tot_alt, tot_no_alt = 0, 0
+    for i in range(10):
+        w = np.random.rand(N)
+        q = np.random.rand(N)
+        friends = make_friends(n, setup = 2, num_friends = N - 1)
+        dist_alt, _ = run_multiplicative_weights(n, m, w, q, friends, epsilon=.5, eta = .1, iterations = 1000)
+        dist_no_alt, _ = run_multiplicative_weights(n, m, w, q, [[] for _ in range(N)], epsilon=0, eta = .1, iterations = 1000)
+        tot_alt += calculate_welfare(dist_alt, w, q)
+        tot_no_alt += calculate_welfare(dist_no_alt, w, q)
+        print(f"Iter {i}: Cumulative with altruism: {tot_alt}, Cumulative without altruism: {tot_no_alt}")
+    print(f"Average with altruism: {tot_alt/50}, Average without altruism: {tot_no_alt/50}")
+    print(f"Average improvement with altruism: {tot_alt / tot_no_alt}")
+    
 
+
+
+
+    # print(friends)
     # Interesting Aside: Larger values of epsilon leads to faster convergence of strategy to pure strategy
-    final_dist, strategy_over_time = run_multiplicative_weights(n, m, w, q, friends, epsilon, eta = 1, iterations = 2_000)
-    plot_final_distribution(final_dist, m)
+    # plot_final_distribution(final_dist, m)
     # plot_strategy_convergence(strategy_over_time, n, m)
-    print("Final approximate distribution:")
-    df = pd.DataFrame(np.round(final_dist, 6), columns = [f"Project {i+1}" for i in range(m)], index = [f"Researcher {i+1}" for i in range(n)])
-    print(df)
-
-    # Maybe we can just show the average amount of unique projects that are worked on
-    # given an epsilon between 0 and 1
+    # print("Final approximate distribution:")
+    # df = pd.DataFrame(np.round(final_dist, 6), columns = [f"Project {i+1}" for i in range(m)], index = [f"Researcher {i+1}" for i in range(n)])
+    # print(df)
